@@ -11,11 +11,10 @@ from .config import FONTS_DIR, OUTPUT_DIR
 EINK_WIDTH = 480
 EINK_HEIGHT = 800
 
-# Colors (pure B&W for e-ink)
+# Colors (pure B&W for e-ink - no greys, they don't render well)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
-LIGHT_GRAY = (180, 180, 180)  # For past days
-DARK_GRAY = (80, 80, 80)      # For subtle elements
+HEADER_GRAY = (140, 140, 140)  # Non-active weekday headers only
 
 # Typography - scaled for 480x800
 MONTH_FONT_SIZE = 32
@@ -101,10 +100,10 @@ class EinkRenderer:
         Returns:
             PIL Image
         """
-        # E-ink typically looks better with white bg, black text
+        # E-ink: white bg, black text - no greys for dates
         bg_color = WHITE if not invert else BLACK
         text_color = BLACK if not invert else WHITE
-        past_color = LIGHT_GRAY if not invert else DARK_GRAY
+        header_inactive = HEADER_GRAY  # Only for non-active weekday headers
 
         img = Image.new('RGB', (self.width, self.height), bg_color)
         draw = ImageDraw.Draw(img)
@@ -135,26 +134,22 @@ class EinkRenderer:
         if calendar_data.today_position:
             _, today_col = calendar_data.today_position
 
-        # Weekday headers - bold black for today's day of week
+        # Weekday headers - BOLD BLACK for today's day, grey for others
         for col, header in enumerate(calendar_data.weekday_headers):
             short = header[0]
             is_today_col = (col == today_col)
 
-            # Use bold font and black for today's weekday
+            # Bold black for today's weekday, grey for others
             font = self.highlight_font if is_today_col else self.date_font
-            color = text_color if is_today_col else past_color
+            color = text_color if is_today_col else header_inactive
 
             hw, hh, hox, hoy = self._get_text_dimensions(draw, short, font)
             hx = col * cell_width + (cell_width - hw) // 2 - hox
             hy = grid_top + (cell_height - hh) // 2 - hoy
             draw.text((hx, hy), short, font=font, fill=color)
 
-        # Days
+        # Days - all same color (black), only today has circle highlight
         dates_top = grid_top + cell_height
-        today_day = None
-        if calendar_data.today_position:
-            tr, tc = calendar_data.today_position
-            today_day = calendar_data.grid[tr][tc].day
 
         for row_idx, week in enumerate(calendar_data.grid):
             for col_idx, day in enumerate(week):
@@ -167,7 +162,6 @@ class EinkRenderer:
                 center_y = cell_y + cell_height // 2
 
                 day_text = str(day.day)
-                is_past = today_day and day.day < today_day
 
                 if day.is_today:
                     # Inverted highlight for e-ink (black circle, white text)
@@ -184,11 +178,11 @@ class EinkRenderer:
                     ty = center_y - dh // 2 - doy
                     draw.text((tx, ty), day_text, font=self.highlight_font, fill=bg_color)
                 else:
+                    # All other days: same black color
                     dw, dh, dox, doy = self._get_text_dimensions(draw, day_text, self.date_font)
                     tx = center_x - dw // 2 - dox
                     ty = center_y - dh // 2 - doy
-                    color = past_color if is_past else text_color
-                    draw.text((tx, ty), day_text, font=self.date_font, fill=color)
+                    draw.text((tx, ty), day_text, font=self.date_font, fill=text_color)
 
         # Save as BMP if path provided
         if output_path:
