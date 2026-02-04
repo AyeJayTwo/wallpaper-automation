@@ -21,11 +21,11 @@ MONTH_YEAR_HEIGHT = 0.14    # Month/year - elegant, not overpowering
 CALENDAR_GRID_HEIGHT = 0.48  # Grid takes generous space for legibility
 # Total calendar area: ~72% of screen (top 2/3 with better proportions)
 
-# Typography - refined sizing for visual hierarchy
-MONTH_FONT_SIZE = 88        # Elegant, all caps month
-DAY_HEADER_FONT_SIZE = 64   # Same as dates for consistency
-DATE_FONT_SIZE = 64         # Comfortable reading size
-TODAY_HIGHLIGHT_PADDING = 28  # Generous padding for highlight
+# Typography - thin, elegant sizing
+MONTH_FONT_SIZE = 72        # Light, refined
+DAY_HEADER_FONT_SIZE = 52   # Same as dates
+DATE_FONT_SIZE = 52         # Delicate but readable
+TODAY_HIGHLIGHT_PADDING = 24  # Tighter padding
 
 # Color palette - sophisticated, high contrast
 # Primary text: warm white (not pure white - easier on eyes)

@@ -26,44 +26,40 @@ class RenderEngine:
         self._load_fonts()
 
     def _load_fonts(self):
-        """Load fonts with sophisticated fallback chain - preferring light weights."""
-        # Light/thin fonts for elegant appearance
-        light_font_candidates = [
-            # SF Pro - Light weight
-            "/System/Library/Fonts/SFNSDisplayLight.ttf",
-            # Avenir Next - Light/UltraLight
-            "/System/Library/Fonts/Avenir Next.ttc",
-            # Helvetica Neue Light
+        """Load ultra-light fonts for elegant, thin appearance."""
+        # Avenir Next font indices:
+        # 10 = Ultra Light, 7 = Regular, 5 = Medium, 2 = Demi Bold
+        avenir_path = "/System/Library/Fonts/Avenir Next.ttc"
+
+        if Path(avenir_path).exists():
+            # Ultra Light for most text
+            self.month_font = ImageFont.truetype(avenir_path, MONTH_FONT_SIZE, index=10)
+            self.header_font = ImageFont.truetype(avenir_path, DAY_HEADER_FONT_SIZE, index=10)
+            self.date_font = ImageFont.truetype(avenir_path, DATE_FONT_SIZE, index=10)
+            # Medium weight for highlighted date (needs to pop against amber)
+            self.highlight_font = ImageFont.truetype(avenir_path, DATE_FONT_SIZE, index=5)
+            return
+
+        # Fallback chain
+        fallback_fonts = [
             "/System/Library/Fonts/HelveticaNeue.ttc",
-            "/System/Library/Fonts/Helvetica Neue.ttc",
-            # System fonts
-            "/System/Library/Fonts/SFNS.ttf",
             "/System/Library/Fonts/Helvetica.ttc",
             "/System/Library/Fonts/Supplemental/Arial.ttf",
         ]
 
-        # Check for custom fonts first
-        custom_light = FONTS_DIR / "custom-light.otf"
-        custom_regular = FONTS_DIR / "custom-regular.otf"
-        if custom_light.exists():
-            light_font_candidates.insert(0, str(custom_light))
-        elif custom_regular.exists():
-            light_font_candidates.insert(0, str(custom_regular))
+        for font_path in fallback_fonts:
+            if Path(font_path).exists():
+                self.month_font = ImageFont.truetype(font_path, MONTH_FONT_SIZE)
+                self.header_font = ImageFont.truetype(font_path, DAY_HEADER_FONT_SIZE)
+                self.date_font = ImageFont.truetype(font_path, DATE_FONT_SIZE)
+                self.highlight_font = self.date_font
+                return
 
-        font_path = None
-        for path in light_font_candidates:
-            if Path(path).exists():
-                font_path = path
-                break
-
-        if font_path:
-            self.month_font = ImageFont.truetype(font_path, MONTH_FONT_SIZE)
-            self.header_font = ImageFont.truetype(font_path, DAY_HEADER_FONT_SIZE)
-            self.date_font = ImageFont.truetype(font_path, DATE_FONT_SIZE)
-        else:
-            self.month_font = ImageFont.load_default()
-            self.header_font = ImageFont.load_default()
-            self.date_font = ImageFont.load_default()
+        # Ultimate fallback
+        self.month_font = ImageFont.load_default()
+        self.header_font = ImageFont.load_default()
+        self.date_font = ImageFont.load_default()
+        self.highlight_font = self.date_font
 
     def _create_forest_gradient(self) -> Image.Image:
         """Create a sophisticated deep forest green gradient background."""
@@ -125,14 +121,36 @@ class RenderEngine:
         font: ImageFont.FreeTypeFont,
         fill: Tuple[int, int, int] = TEXT_COLOR,
         shadow_offset: int = 2,
-        shadow_alpha: int = 80
+        letter_spacing: int = 0
     ):
         """Draw text with subtle shadow for depth and readability."""
         x, y = position
-        # Subtle shadow for depth
         shadow_color = (0, 0, 0)
-        draw.text((x + shadow_offset, y + shadow_offset), text, font=font, fill=shadow_color)
-        draw.text((x, y), text, font=font, fill=fill)
+
+        if letter_spacing > 0:
+            # Draw each character with spacing
+            current_x = x
+            for char in text:
+                draw.text((current_x + shadow_offset, y + shadow_offset), char, font=font, fill=shadow_color)
+                draw.text((current_x, y), char, font=font, fill=fill)
+                char_width = draw.textbbox((0, 0), char, font=font)[2]
+                current_x += char_width + letter_spacing
+        else:
+            draw.text((x + shadow_offset, y + shadow_offset), text, font=font, fill=shadow_color)
+            draw.text((x, y), text, font=font, fill=fill)
+
+    def _get_spaced_text_width(self, draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, letter_spacing: int) -> int:
+        """Calculate total width of text with letter spacing."""
+        if letter_spacing == 0:
+            return draw.textbbox((0, 0), text, font=font)[2]
+
+        total_width = 0
+        for i, char in enumerate(text):
+            char_width = draw.textbbox((0, 0), char, font=font)[2]
+            total_width += char_width
+            if i < len(text) - 1:
+                total_width += letter_spacing
+        return total_width
 
     def _get_text_dimensions(
         self,
@@ -191,15 +209,19 @@ class RenderEngine:
         month_area_height = int(self.height * MONTH_YEAR_HEIGHT)
         grid_area_height = int(self.height * CALENDAR_GRID_HEIGHT)
 
-        # --- Month and Year (ALL CAPS for month) ---
+        # --- Month and Year (ALL CAPS, with letter spacing) ---
         month_year_text = f"{calendar_data.month_name.upper()} {calendar_data.year}"
-        text_w, text_h, off_x, off_y = self._get_text_dimensions(draw, month_year_text, self.month_font)
+        letter_spacing = 12  # Elegant spacing between characters
 
-        # Center precisely (accounting for font metrics)
-        month_x = (self.width - text_w) // 2 - off_x
+        # Calculate width with spacing
+        spaced_width = self._get_spaced_text_width(draw, month_year_text, self.month_font, letter_spacing)
+        _, text_h, _, off_y = self._get_text_dimensions(draw, month_year_text, self.month_font)
+
+        # Center precisely
+        month_x = (self.width - spaced_width) // 2
         month_y = top_margin + (month_area_height - text_h) // 2 - off_y
 
-        self._draw_text_with_shadow(draw, (month_x, month_y), month_year_text, self.month_font)
+        self._draw_text_with_shadow(draw, (month_x, month_y), month_year_text, self.month_font, letter_spacing=letter_spacing)
 
         # --- Grid Layout ---
         grid_top = top_margin + month_area_height
@@ -247,10 +269,13 @@ class RenderEngine:
                 is_past = today_day is not None and day.day < today_day
 
                 if day.is_today:
+                    # Use medium weight font for highlighted date (more visible)
+                    hw, hh, hox, hoy = self._get_text_dimensions(draw, day_text, self.highlight_font)
+
                     # Draw highlight - pill/rounded rectangle shape
                     padding = TODAY_HIGHLIGHT_PADDING
-                    highlight_w = dw + padding * 2
-                    highlight_h = dh + padding * 2
+                    highlight_w = hw + padding * 2
+                    highlight_h = hh + padding * 2
                     radius = min(highlight_w, highlight_h) // 2  # Circular ends
 
                     hl_x1 = cell_center_x - highlight_w // 2
@@ -260,10 +285,10 @@ class RenderEngine:
 
                     self._draw_rounded_rect(draw, (hl_x1, hl_y1, hl_x2, hl_y2), radius, TODAY_HIGHLIGHT_COLOR)
 
-                    # Center text precisely within highlight
-                    text_x = cell_center_x - dw // 2 - dox
-                    text_y = cell_center_y - dh // 2 - doy
-                    draw.text((text_x, text_y), day_text, font=self.date_font, fill=TODAY_TEXT_COLOR)
+                    # Center text precisely within highlight (medium weight for visibility)
+                    text_x = cell_center_x - hw // 2 - hox
+                    text_y = cell_center_y - hh // 2 - hoy
+                    draw.text((text_x, text_y), day_text, font=self.highlight_font, fill=TODAY_TEXT_COLOR)
                 else:
                     # Regular day - color based on past/future and weekend
                     text_x = cell_center_x - dw // 2 - dox
