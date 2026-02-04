@@ -209,11 +209,28 @@ def main():
         action='store_true',
         help='Verbose output'
     )
+    parser.add_argument(
+        '--eink',
+        action='store_true',
+        help='Generate B&W wallpaper for e-ink displays (480x800 BMP)'
+    )
 
     args = parser.parse_args()
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    # Handle e-ink mode separately
+    if args.eink:
+        from .eink_renderer import generate_eink
+        output_dir = Path(args.output_dir) if args.output_dir else None
+        try:
+            output_path = generate_eink(date_str=args.date, output_dir=output_dir)
+            print(f"\nE-ink wallpaper saved to: {output_path}")
+            sys.exit(0)
+        except Exception as e:
+            logger.exception(f"E-ink generation failed: {e}")
+            sys.exit(1)
 
     orchestrator = Orchestrator(timezone=args.timezone)
 
