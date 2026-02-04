@@ -11,6 +11,8 @@ ASSETS_DIR = PROJECT_ROOT / "assets"
 BACKGROUNDS_DIR = ASSETS_DIR / "backgrounds"
 FONTS_DIR = ASSETS_DIR / "fonts"
 OUTPUT_DIR = PROJECT_ROOT / "output"
+OUTPUT_IPHONE_DIR = OUTPUT_DIR / "iphone"
+OUTPUT_EINK_DIR = OUTPUT_DIR / "eink"
 
 # Calendar settings
 WEEK_START_MONDAY = True  # ISO standard

@@ -8,7 +8,7 @@ from typing import Optional
 from .calendar_engine import CalendarEngine
 from .render_engine import RenderEngine
 from .validator import Validator, ValidationResult
-from .config import OUTPUT_DIR, BACKGROUNDS_DIR, DEFAULT_TIMEZONE
+from .config import OUTPUT_DIR, OUTPUT_IPHONE_DIR, OUTPUT_EINK_DIR, BACKGROUNDS_DIR, DEFAULT_TIMEZONE
 
 
 logging.basicConfig(
@@ -95,7 +95,7 @@ class Orchestrator:
         Raises:
             PipelineError: If pipeline fails and fail_fast is True
         """
-        output_dir = output_dir or OUTPUT_DIR
+        output_dir = output_dir or OUTPUT_IPHONE_DIR
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Step 1: Get target date

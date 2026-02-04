@@ -5,7 +5,7 @@ from typing import Optional, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
 from .calendar_engine import CalendarData
-from .config import FONTS_DIR, OUTPUT_DIR
+from .config import FONTS_DIR, OUTPUT_EINK_DIR
 
 # E-ink display settings
 EINK_WIDTH = 480
@@ -292,11 +292,21 @@ def generate_eink(date_str: Optional[str] = None, output_dir: Optional[Path] = N
             print(f"Could not fetch quote: {e}")
 
     renderer = EinkRenderer()
-    output_dir = output_dir or OUTPUT_DIR
+    output_dir = output_dir or OUTPUT_EINK_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     today_day = cal_data.grid[cal_data.today_position[0]][cal_data.today_position[1]].day
-    output_path = output_dir / f"eink_{cal_data.year}-{cal_data.month:02d}-{today_day:02d}.bmp"
+    output_filename = f"eink_{cal_data.year}-{cal_data.month:02d}-{today_day:02d}.bmp"
+    output_path = output_dir / output_filename
 
     renderer.render(cal_data, output_path=output_path, quote_text=quote_text, quote_author=quote_author)
+
+    # Create latest.bmp symlink
+    latest_link = output_dir / "latest.bmp"
+    if latest_link.exists() or latest_link.is_symlink():
+        latest_link.unlink()
+    latest_link.symlink_to(output_filename)
+
     return output_path
 
 
