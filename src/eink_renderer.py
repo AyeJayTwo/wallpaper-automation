@@ -19,11 +19,14 @@ WHITE = (255, 255, 255)
 MONTH_FONT_SIZE = 32
 DATE_FONT_SIZE = 24
 HEADER_FONT_SIZE = 24
+QUOTE_FONT_SIZE = 16
+QUOTE_AUTHOR_SIZE = 14
 
 # Layout
-TOP_MARGIN = 0.08
-MONTH_HEIGHT = 0.12
-GRID_HEIGHT = 0.55
+TOP_MARGIN = 0.06
+MONTH_HEIGHT = 0.10
+GRID_HEIGHT = 0.45
+QUOTE_MARGIN = 0.03  # Space between grid and quote
 
 
 class EinkRenderer:
@@ -43,6 +46,9 @@ class EinkRenderer:
             self.month_font = ImageFont.truetype(avenir_path, MONTH_FONT_SIZE, index=5)
             self.date_font = ImageFont.truetype(avenir_path, DATE_FONT_SIZE, index=7)  # Regular
             self.highlight_font = ImageFont.truetype(avenir_path, DATE_FONT_SIZE, index=2)  # Demi Bold
+            # Quote fonts - italic for quote, regular for author
+            self.quote_font = ImageFont.truetype(avenir_path, QUOTE_FONT_SIZE, index=4)  # Italic
+            self.quote_author_font = ImageFont.truetype(avenir_path, QUOTE_AUTHOR_SIZE, index=7)  # Regular
             return
 
         # Fallback
@@ -55,11 +61,15 @@ class EinkRenderer:
                 self.month_font = ImageFont.truetype(path, MONTH_FONT_SIZE)
                 self.date_font = ImageFont.truetype(path, DATE_FONT_SIZE)
                 self.highlight_font = self.date_font
+                self.quote_font = ImageFont.truetype(path, QUOTE_FONT_SIZE)
+                self.quote_author_font = ImageFont.truetype(path, QUOTE_AUTHOR_SIZE)
                 return
 
         self.month_font = ImageFont.load_default()
         self.date_font = ImageFont.load_default()
         self.highlight_font = ImageFont.load_default()
+        self.quote_font = ImageFont.load_default()
+        self.quote_author_font = ImageFont.load_default()
 
     def _get_text_dimensions(self, draw: ImageDraw.ImageDraw, text: str, font) -> Tuple[int, int, int, int]:
         """Get text dimensions with offsets."""
@@ -82,11 +92,36 @@ class EinkRenderer:
             draw.text((x, y), char, font=font, fill=fill)
             x += draw.textbbox((0, 0), char, font=font)[2] + spacing
 
+    def _wrap_text(self, text: str, font, max_width: int, draw: ImageDraw.ImageDraw) -> list:
+        """Wrap text to fit within max_width."""
+        words = text.replace('\n', ' ').split()
+        lines = []
+        current_line = []
+
+        for word in words:
+            test_line = ' '.join(current_line + [word])
+            bbox = draw.textbbox((0, 0), test_line, font=font)
+            width = bbox[2] - bbox[0]
+
+            if width <= max_width:
+                current_line.append(word)
+            else:
+                if current_line:
+                    lines.append(' '.join(current_line))
+                current_line = [word]
+
+        if current_line:
+            lines.append(' '.join(current_line))
+
+        return lines
+
     def render(
         self,
         calendar_data: CalendarData,
         output_path: Optional[Path] = None,
-        invert: bool = False
+        invert: bool = False,
+        quote_text: Optional[str] = None,
+        quote_author: Optional[str] = None
     ) -> Image.Image:
         """
         Render B&W calendar for e-ink display.
@@ -95,6 +130,8 @@ class EinkRenderer:
             calendar_data: Calendar data
             output_path: Save path (use .bmp extension)
             invert: If True, white background with black text
+            quote_text: Optional quote to display below calendar
+            quote_author: Optional author attribution
 
         Returns:
             PIL Image
@@ -181,6 +218,38 @@ class EinkRenderer:
                     ty = center_y - dh // 2 - doy
                     draw.text((tx, ty), day_text, font=self.date_font, fill=text_color)
 
+        # --- Quote Section ---
+        if quote_text:
+            quote_top = grid_top + grid_area + int(self.height * QUOTE_MARGIN)
+            quote_margin_x = 24
+            max_quote_width = self.width - (quote_margin_x * 2)
+
+            # Clean up quote text (remove markdown formatting)
+            clean_quote = quote_text.replace('*', '').replace('_', '').strip()
+
+            # Wrap quote text
+            quote_lines = self._wrap_text(f'"{clean_quote}"', self.quote_font, max_quote_width, draw)
+
+            # Limit to reasonable number of lines
+            max_lines = 6
+            if len(quote_lines) > max_lines:
+                quote_lines = quote_lines[:max_lines]
+                quote_lines[-1] = quote_lines[-1].rstrip() + '..."'
+
+            # Draw quote lines
+            line_height = int(QUOTE_FONT_SIZE * 1.4)
+            current_y = quote_top
+
+            for line in quote_lines:
+                draw.text((quote_margin_x, current_y), line, font=self.quote_font, fill=text_color)
+                current_y += line_height
+
+            # Draw author attribution
+            if quote_author and quote_author != "Unknown":
+                author_text = f"— {quote_author}"
+                current_y += 4  # Small gap
+                draw.text((quote_margin_x, current_y), author_text, font=self.quote_author_font, fill=text_color)
+
         # Save as BMP if path provided
         if output_path:
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -190,8 +259,8 @@ class EinkRenderer:
         return img
 
 
-def generate_eink(date_str: Optional[str] = None, output_dir: Optional[Path] = None) -> Path:
-    """Generate e-ink wallpaper."""
+def generate_eink(date_str: Optional[str] = None, output_dir: Optional[Path] = None, include_quote: bool = True) -> Path:
+    """Generate e-ink wallpaper with optional Readwise quote."""
     from .calendar_engine import CalendarEngine
     import pytz
     from datetime import datetime
@@ -207,11 +276,27 @@ def generate_eink(date_str: Optional[str] = None, output_dir: Optional[Path] = N
     else:
         cal_data = engine.generate()
 
+    # Fetch quote from Readwise
+    quote_text = None
+    quote_author = None
+
+    if include_quote:
+        try:
+            from .readwise import get_quote_for_date
+            today_day = cal_data.grid[cal_data.today_position[0]][cal_data.today_position[1]].day
+            date_key = f"{cal_data.year}-{cal_data.month:02d}-{today_day:02d}"
+            quote = get_quote_for_date(date_key)
+            quote_text = quote.text
+            quote_author = quote.author
+        except Exception as e:
+            print(f"Could not fetch quote: {e}")
+
     renderer = EinkRenderer()
     output_dir = output_dir or OUTPUT_DIR
-    output_path = output_dir / f"eink_{cal_data.year}-{cal_data.month:02d}-{cal_data.grid[cal_data.today_position[0]][cal_data.today_position[1]].day:02d}.bmp"
+    today_day = cal_data.grid[cal_data.today_position[0]][cal_data.today_position[1]].day
+    output_path = output_dir / f"eink_{cal_data.year}-{cal_data.month:02d}-{today_day:02d}.bmp"
 
-    renderer.render(cal_data, output_path=output_path)
+    renderer.render(cal_data, output_path=output_path, quote_text=quote_text, quote_author=quote_author)
     return output_path
 
 
