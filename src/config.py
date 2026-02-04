@@ -16,22 +16,29 @@ OUTPUT_DIR = PROJECT_ROOT / "output"
 WEEK_START_MONDAY = True  # ISO standard
 
 # Layout settings (as fractions of screen height)
-CALENDAR_TOP_MARGIN = 0.08  # Start below notch area
-MONTH_YEAR_HEIGHT = 0.17    # Month/year takes top portion
-CALENDAR_GRID_HEIGHT = 0.42  # Grid takes remaining space
-# Total calendar area: ~67% of screen (top 2/3)
+CALENDAR_TOP_MARGIN = 0.10  # Generous top margin for visual breathing room
+MONTH_YEAR_HEIGHT = 0.14    # Month/year - elegant, not overpowering
+CALENDAR_GRID_HEIGHT = 0.48  # Grid takes generous space for legibility
+# Total calendar area: ~72% of screen (top 2/3 with better proportions)
 
-# Typography
-MONTH_FONT_SIZE = 120
-DAY_HEADER_FONT_SIZE = 48
-DATE_FONT_SIZE = 72
-TODAY_HIGHLIGHT_PADDING = 20
+# Typography - refined sizing for visual hierarchy
+MONTH_FONT_SIZE = 96        # Elegant, not shouting
+DAY_HEADER_FONT_SIZE = 36   # Subtle weekday labels
+DATE_FONT_SIZE = 64         # Comfortable reading size
+TODAY_HIGHLIGHT_PADDING = 28  # Generous padding for highlight
 
-# Colors (clean/readable style)
-TEXT_COLOR = (255, 255, 255)  # White
-TEXT_SHADOW_COLOR = (0, 0, 0, 128)  # Semi-transparent black
-TODAY_HIGHLIGHT_COLOR = (255, 255, 255)  # White circle
-TODAY_TEXT_COLOR = (0, 0, 0)  # Black text on white
+# Color palette - sophisticated, high contrast
+# Primary text: warm white (not pure white - easier on eyes)
+TEXT_COLOR = (250, 248, 245)
+# Subtle shadow for depth
+TEXT_SHADOW_COLOR = (0, 0, 0, 100)
+# Today highlight: warm amber/coral - creates striking contrast with forest green
+TODAY_HIGHLIGHT_COLOR = (255, 171, 64)  # Amber gold
+TODAY_TEXT_COLOR = (28, 28, 30)  # Near-black for contrast
+# Weekend text: slightly muted
+WEEKEND_TEXT_COLOR = (180, 178, 175)
+# Weekday headers: subtle, understated
+HEADER_TEXT_COLOR = (200, 198, 195)
 
 # Timezone
 DEFAULT_TIMEZONE = "America/Los_Angeles"
