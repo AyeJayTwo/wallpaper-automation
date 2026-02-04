@@ -12,7 +12,8 @@ from .config import (
     MONTH_FONT_SIZE, DAY_HEADER_FONT_SIZE, DATE_FONT_SIZE,
     TODAY_HIGHLIGHT_PADDING,
     TEXT_COLOR, TEXT_SHADOW_COLOR, TODAY_HIGHLIGHT_COLOR, TODAY_TEXT_COLOR,
-    WEEKEND_TEXT_COLOR, HEADER_TEXT_COLOR
+    PAST_DAY_COLOR, FUTURE_DAY_COLOR, WEEKEND_TEXT_COLOR, WEEKEND_PAST_COLOR,
+    HEADER_TEXT_COLOR
 )
 
 
@@ -25,33 +26,32 @@ class RenderEngine:
         self._load_fonts()
 
     def _load_fonts(self):
-        """Load fonts with sophisticated fallback chain."""
-        # Font priority: SF Pro Display > Avenir Next > Helvetica Neue > System
-        font_candidates = [
-            # SF Pro Display - Apple's modern system font
-            "/System/Library/Fonts/SFNS.ttf",
-            "/System/Library/Fonts/SFNSDisplay.ttf",
-            # Avenir Next - elegant, modern humanist sans-serif
+        """Load fonts with sophisticated fallback chain - preferring light weights."""
+        # Light/thin fonts for elegant appearance
+        light_font_candidates = [
+            # SF Pro - Light weight
+            "/System/Library/Fonts/SFNSDisplayLight.ttf",
+            # Avenir Next - Light/UltraLight
             "/System/Library/Fonts/Avenir Next.ttc",
-            "/Library/Fonts/Avenir Next.ttc",
-            # Helvetica Neue - clean, timeless
+            # Helvetica Neue Light
             "/System/Library/Fonts/HelveticaNeue.ttc",
             "/System/Library/Fonts/Helvetica Neue.ttc",
-            # Fallbacks
+            # System fonts
+            "/System/Library/Fonts/SFNS.ttf",
             "/System/Library/Fonts/Helvetica.ttc",
             "/System/Library/Fonts/Supplemental/Arial.ttf",
         ]
 
         # Check for custom fonts first
+        custom_light = FONTS_DIR / "custom-light.otf"
         custom_regular = FONTS_DIR / "custom-regular.otf"
-        custom_bold = FONTS_DIR / "custom-bold.otf"
-        if custom_bold.exists():
-            font_candidates.insert(0, str(custom_bold))
-        if custom_regular.exists():
-            font_candidates.insert(0, str(custom_regular))
+        if custom_light.exists():
+            light_font_candidates.insert(0, str(custom_light))
+        elif custom_regular.exists():
+            light_font_candidates.insert(0, str(custom_regular))
 
         font_path = None
-        for path in font_candidates:
+        for path in light_font_candidates:
             if Path(path).exists():
                 font_path = path
                 break
@@ -191,8 +191,8 @@ class RenderEngine:
         month_area_height = int(self.height * MONTH_YEAR_HEIGHT)
         grid_area_height = int(self.height * CALENDAR_GRID_HEIGHT)
 
-        # --- Month and Year ---
-        month_year_text = f"{calendar_data.month_name} {calendar_data.year}"
+        # --- Month and Year (ALL CAPS for month) ---
+        month_year_text = f"{calendar_data.month_name.upper()} {calendar_data.year}"
         text_w, text_h, off_x, off_y = self._get_text_dimensions(draw, month_year_text, self.month_font)
 
         # Center precisely (accounting for font metrics)
@@ -207,22 +207,28 @@ class RenderEngine:
         num_rows = len(calendar_data.grid) + 1
         cell_height = grid_area_height // num_rows
 
-        # --- Weekday Headers ---
+        # --- Weekday Headers (same font size as dates) ---
         header_y_base = grid_top
         for col, header in enumerate(calendar_data.weekday_headers):
-            # Use single letter for elegance (M T W T F S S)
+            # Use single letter for clean look (M T W T F S S)
             short_header = header[0]
-            hw, hh, hox, hoy = self._get_text_dimensions(draw, short_header, self.header_font)
+            hw, hh, hox, hoy = self._get_text_dimensions(draw, short_header, self.date_font)
 
             hx = col * cell_width + (cell_width - hw) // 2 - hox
             hy = header_y_base + (cell_height - hh) // 2 - hoy
 
             # Weekend headers more subtle
-            color = WEEKEND_TEXT_COLOR if col >= 5 else HEADER_TEXT_COLOR
-            self._draw_text_with_shadow(draw, (hx, hy), short_header, self.header_font, fill=color, shadow_offset=1)
+            color = WEEKEND_PAST_COLOR if col >= 5 else HEADER_TEXT_COLOR
+            self._draw_text_with_shadow(draw, (hx, hy), short_header, self.date_font, fill=color, shadow_offset=1)
 
         # --- Calendar Days ---
         dates_top = grid_top + cell_height
+
+        # Find today's day number for past/future comparison
+        today_day = None
+        if calendar_data.today_position:
+            today_row, today_col = calendar_data.today_position
+            today_day = calendar_data.grid[today_row][today_col].day
 
         for row_idx, week in enumerate(calendar_data.grid):
             for col_idx, day in enumerate(week):
@@ -236,6 +242,9 @@ class RenderEngine:
 
                 day_text = str(day.day)
                 dw, dh, dox, doy = self._get_text_dimensions(draw, day_text, self.date_font)
+
+                # Determine if this day is in the past
+                is_past = today_day is not None and day.day < today_day
 
                 if day.is_today:
                     # Draw highlight - pill/rounded rectangle shape
@@ -256,11 +265,16 @@ class RenderEngine:
                     text_y = cell_center_y - dh // 2 - doy
                     draw.text((text_x, text_y), day_text, font=self.date_font, fill=TODAY_TEXT_COLOR)
                 else:
-                    # Regular day
+                    # Regular day - color based on past/future and weekend
                     text_x = cell_center_x - dw // 2 - dox
                     text_y = cell_center_y - dh // 2 - doy
 
-                    color = WEEKEND_TEXT_COLOR if col_idx >= 5 else TEXT_COLOR
+                    is_weekend = col_idx >= 5
+                    if is_past:
+                        color = WEEKEND_PAST_COLOR if is_weekend else PAST_DAY_COLOR
+                    else:
+                        color = WEEKEND_TEXT_COLOR if is_weekend else FUTURE_DAY_COLOR
+
                     self._draw_text_with_shadow(draw, (text_x, text_y), day_text, self.date_font, fill=color)
 
         # Save output

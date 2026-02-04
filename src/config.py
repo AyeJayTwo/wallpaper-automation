@@ -22,8 +22,8 @@ CALENDAR_GRID_HEIGHT = 0.48  # Grid takes generous space for legibility
 # Total calendar area: ~72% of screen (top 2/3 with better proportions)
 
 # Typography - refined sizing for visual hierarchy
-MONTH_FONT_SIZE = 96        # Elegant, not shouting
-DAY_HEADER_FONT_SIZE = 36   # Subtle weekday labels
+MONTH_FONT_SIZE = 88        # Elegant, all caps month
+DAY_HEADER_FONT_SIZE = 64   # Same as dates for consistency
 DATE_FONT_SIZE = 64         # Comfortable reading size
 TODAY_HIGHLIGHT_PADDING = 28  # Generous padding for highlight
 
@@ -35,9 +35,14 @@ TEXT_SHADOW_COLOR = (0, 0, 0, 100)
 # Today highlight: warm amber/coral - creates striking contrast with forest green
 TODAY_HIGHLIGHT_COLOR = (255, 171, 64)  # Amber gold
 TODAY_TEXT_COLOR = (28, 28, 30)  # Near-black for contrast
-# Weekend text: slightly muted
+# Past days: light grey to indicate days gone
+PAST_DAY_COLOR = (120, 118, 115)
+# Future days: full brightness
+FUTURE_DAY_COLOR = (250, 248, 245)
+# Weekend text: slightly muted (applied on top of past/future)
 WEEKEND_TEXT_COLOR = (180, 178, 175)
-# Weekday headers: subtle, understated
+WEEKEND_PAST_COLOR = (100, 98, 95)
+# Weekday headers: same style as dates
 HEADER_TEXT_COLOR = (200, 198, 195)
 
 # Timezone
