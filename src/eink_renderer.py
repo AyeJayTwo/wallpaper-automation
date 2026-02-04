@@ -14,7 +14,6 @@ EINK_HEIGHT = 800
 # Colors (pure B&W for e-ink - no greys, they don't render well)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
-HEADER_GRAY = (140, 140, 140)  # Non-active weekday headers only
 
 # Typography - scaled for 480x800
 MONTH_FONT_SIZE = 32
@@ -100,10 +99,9 @@ class EinkRenderer:
         Returns:
             PIL Image
         """
-        # E-ink: white bg, black text - no greys for dates
+        # E-ink: pure black and white only - no greys
         bg_color = WHITE if not invert else BLACK
         text_color = BLACK if not invert else WHITE
-        header_inactive = HEADER_GRAY  # Only for non-active weekday headers
 
         img = Image.new('RGB', (self.width, self.height), bg_color)
         draw = ImageDraw.Draw(img)
@@ -134,19 +132,18 @@ class EinkRenderer:
         if calendar_data.today_position:
             _, today_col = calendar_data.today_position
 
-        # Weekday headers - BOLD BLACK for today's day, grey for others
+        # Weekday headers - all black, BOLD for today's day
         for col, header in enumerate(calendar_data.weekday_headers):
             short = header[0]
             is_today_col = (col == today_col)
 
-            # Bold black for today's weekday, grey for others
+            # Bold for today's weekday, regular for others - all black
             font = self.highlight_font if is_today_col else self.date_font
-            color = text_color if is_today_col else header_inactive
 
             hw, hh, hox, hoy = self._get_text_dimensions(draw, short, font)
             hx = col * cell_width + (cell_width - hw) // 2 - hox
             hy = grid_top + (cell_height - hh) // 2 - hoy
-            draw.text((hx, hy), short, font=font, fill=color)
+            draw.text((hx, hy), short, font=font, fill=text_color)
 
         # Days - all same color (black), only today has circle highlight
         dates_top = grid_top + cell_height
