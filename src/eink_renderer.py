@@ -19,14 +19,14 @@ WHITE = (255, 255, 255)
 MONTH_FONT_SIZE = 32
 DATE_FONT_SIZE = 24
 HEADER_FONT_SIZE = 24
-QUOTE_FONT_SIZE = 16
-QUOTE_AUTHOR_SIZE = 14
+QUOTE_FONT_SIZE = 18
+QUOTE_AUTHOR_SIZE = 16
 
 # Layout
 TOP_MARGIN = 0.06
 MONTH_HEIGHT = 0.10
 GRID_HEIGHT = 0.45
-QUOTE_MARGIN = 0.03  # Space between grid and quote
+QUOTE_MARGIN = 0.025  # Space between grid and quote
 
 
 class EinkRenderer:
@@ -231,7 +231,7 @@ class EinkRenderer:
             quote_lines = self._wrap_text(f'"{clean_quote}"', self.quote_font, max_quote_width, draw)
 
             # Limit to reasonable number of lines
-            max_lines = 6
+            max_lines = 8
             if len(quote_lines) > max_lines:
                 quote_lines = quote_lines[:max_lines]
                 quote_lines[-1] = quote_lines[-1].rstrip() + '..."'
