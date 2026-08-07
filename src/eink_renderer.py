@@ -51,10 +51,20 @@ class EinkRenderer:
             self.quote_author_font = ImageFont.truetype(avenir_path, QUOTE_AUTHOR_SIZE, index=7)  # Regular
             return
 
-        # Fallback
+        # Fallback — macOS system fonts, then Linux/Docker paths (DejaVu bundled
+        # with python3-pil or fonts-dejavu-core on Debian/Ubuntu/Synology)
         fallbacks = [
             "/System/Library/Fonts/Helvetica.ttc",
             "/System/Library/Fonts/Supplemental/Arial.ttf",
+            # DejaVu Sans — present on most Linux distros and in python3-pil extras
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+            # Noto Sans — common on Debian/Ubuntu
+            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+            "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+            # Liberation Sans — RHEL/Fedora
+            "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
         ]
         for path in fallbacks:
             if Path(path).exists():
