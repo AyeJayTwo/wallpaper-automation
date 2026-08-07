@@ -41,8 +41,8 @@ DEVICE_IP = os.environ.get("DEVICE_IP", "10.0.0.164")
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "20"))
 UPLOAD_TIMEOUT = int(os.environ.get("UPLOAD_TIMEOUT", "300"))
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip().strip("'\"")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip().strip("'\"")
 
 APP_DIR = Path(__file__).parent.parent
 OUTPUT_DIR = APP_DIR / "output" / "eink"
@@ -192,10 +192,15 @@ def notify_telegram(date: str) -> None:
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
 
+    # Numeric chat IDs should be sent as ints; usernames stay strings.
+    chat_id: object = TELEGRAM_CHAT_ID
+    if TELEGRAM_CHAT_ID.lstrip("-").isdigit():
+        chat_id = int(TELEGRAM_CHAT_ID)
+
     text = f"Xteink wallpaper uploaded for {date}"
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = json.dumps({
-        "chat_id": TELEGRAM_CHAT_ID,
+        "chat_id": chat_id,
         "text": text,
         "disable_notification": False,
     }).encode("utf-8")
@@ -212,10 +217,20 @@ def notify_telegram(date: str) -> None:
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
             body = resp.read().decode("utf-8", errors="replace")
-        if '"ok":true' in body.replace(" ", "").lower() or '"ok": true' in body:
+        data = json.loads(body)
+        if data.get("ok"):
             log.info("Telegram notification sent.")
         else:
-            log.warning("Telegram API unexpected response: %s", body[:200])
+            log.warning("Telegram API error: %s", data.get("description", body[:200]))
+    except urllib.error.HTTPError as exc:
+        err_body = ""
+        try:
+            err_body = exc.read().decode("utf-8", errors="replace")
+            err_data = json.loads(err_body)
+            detail = err_data.get("description", err_body[:300])
+        except Exception:
+            detail = err_body[:300] or str(exc)
+        log.warning("Telegram notification failed (HTTP %s): %s", exc.code, detail)
     except Exception as exc:
         log.warning("Telegram notification failed: %s", exc)
 
