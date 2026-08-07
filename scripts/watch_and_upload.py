@@ -13,13 +13,16 @@ Usage (normally run via Docker):
     python -u scripts/watch_and_upload.py
 
 Environment variables (set via .env / docker-compose):
-    DEVICE_IP       IP of the CrossPoint device (default: 10.0.0.164)
-    TZ              Container timezone for date calculations (default: UTC)
-    POLL_INTERVAL   Seconds between status checks (default: 20)
-    UPLOAD_TIMEOUT  Max seconds for the curl upload (default: 300)
-    MAX_RETRIES     Upload retry attempts before backing off (default: 3)
+    DEVICE_IP            IP of the CrossPoint device (default: 10.0.0.164)
+    TZ                   Container timezone for date calculations (default: UTC)
+    POLL_INTERVAL        Seconds between status checks (default: 20)
+    UPLOAD_TIMEOUT       Max seconds for the curl upload (default: 300)
+    MAX_RETRIES          Upload retry attempts before backing off (default: 3)
+    TELEGRAM_BOT_TOKEN   Optional — Telegram bot token from @BotFather
+    TELEGRAM_CHAT_ID     Optional — chat ID to notify on successful upload
 """
 
+import json
 import logging
 import os
 import subprocess
@@ -38,6 +41,8 @@ DEVICE_IP = os.environ.get("DEVICE_IP", "10.0.0.164")
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "20"))
 UPLOAD_TIMEOUT = int(os.environ.get("UPLOAD_TIMEOUT", "300"))
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 
 APP_DIR = Path(__file__).parent.parent
 OUTPUT_DIR = APP_DIR / "output" / "eink"
@@ -176,6 +181,45 @@ def run_upload_with_retries(bmp_path: Path) -> bool:
     return False
 
 
+def notify_telegram(date: str) -> None:
+    """
+    Send a Telegram message on successful upload.
+
+    No-op if TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is unset.
+    Failures are logged but never raise — notification must not block the
+    watcher loop.
+    """
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+
+    text = f"Xteink wallpaper uploaded for {date}"
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = json.dumps({
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": text,
+        "disable_notification": False,
+    }).encode("utf-8")
+
+    try:
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "xteink-watcher/1.0",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+        if '"ok":true' in body.replace(" ", "").lower() or '"ok": true' in body:
+            log.info("Telegram notification sent.")
+        else:
+            log.warning("Telegram API unexpected response: %s", body[:200])
+    except Exception as exc:
+        log.warning("Telegram notification failed: %s", exc)
+
+
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
@@ -186,6 +230,10 @@ def main() -> None:
 
     log.info("Xteink watcher started. Polling %s every %ds.", STATUS_URL, POLL_INTERVAL)
     log.info("Upload timeout: %ds, max retries: %d", UPLOAD_TIMEOUT, MAX_RETRIES)
+    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+        log.info("Telegram notifications enabled (chat_id=%s).", TELEGRAM_CHAT_ID)
+    else:
+        log.info("Telegram notifications disabled (set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID to enable).")
 
     last_logged_date = None
     last_logged_skip = None
@@ -223,6 +271,7 @@ def main() -> None:
         success = run_upload_with_retries(bmp_path)
         if success:
             write_lockfile(date)
+            notify_telegram(date)
             log.info(
                 "Done for %s. Put the Xteink to sleep to see the new wallpaper.", date
             )
