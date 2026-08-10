@@ -14,8 +14,9 @@
 #      Telegram setup:
 #        a. Message @BotFather → /newbot → copy the bot token
 #        b. Message your new bot once (any text)
-#        c. Open https://api.telegram.org/bot<TOKEN>/getUpdates
-#           and copy the numeric "chat":{"id": ...} value
+#        c. Get your numeric chat id via @userinfobot (preferred), or run:
+#             python3 scripts/test_telegram.py
+#           (avoid pasting the bot token into a browser URL)
 #
 #   3. Optionally set DEVICE_IP if your Xteink is not at 10.0.0.164:
 #        DEVICE_IP=10.0.0.164
@@ -36,10 +37,15 @@
 #   - network_mode: host is required so the container can reach the Xteink
 #     directly on the LAN (10.0.0.x).  On Synology DSM, Container Manager
 #     supports host networking for custom Docker Compose projects.
+#   - Host networking implies LAN trust: only your home network should be
+#     able to answer at DEVICE_IP. The watcher requires /api/status JSON
+#     with "device":"X4" and does not follow HTTP redirects.
 #   - output/ persists generated BMPs across container restarts.
 #   - state/ holds per-day upload lockfiles.
 #   - The container restarts automatically if it crashes (e.g. on NAS reboot).
 #   - Telegram notify is optional; omit the env vars to disable.
+#   - Never commit .env. A .dockerignore keeps .env/output/state out of
+#     image layers when you build on the NAS.
 
 services:
   xteink-watcher:

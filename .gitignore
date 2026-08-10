@@ -12,6 +12,9 @@ env/
 # Output
 output/
 
+# Watcher lockfiles (Synology / local)
+state/
+
 # IDE
 .idea/
 .vscode/

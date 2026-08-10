@@ -22,6 +22,7 @@ Environment variables (set via .env / docker-compose):
     TELEGRAM_CHAT_ID     Optional — chat ID to notify on successful upload
 """
 
+import ipaddress
 import json
 import logging
 import os
@@ -37,7 +38,13 @@ from pathlib import Path
 # Configuration
 # ---------------------------------------------------------------------------
 
-DEVICE_IP = os.environ.get("DEVICE_IP", "10.0.0.164")
+DEVICE_IP = os.environ.get("DEVICE_IP", "10.0.0.164").strip()
+try:
+    # Reject hostnames / odd values so STATUS_URL cannot be steered off-LAN.
+    DEVICE_IP = str(ipaddress.IPv4Address(DEVICE_IP))
+except ValueError as exc:
+    raise SystemExit(f"DEVICE_IP must be an IPv4 address, got {DEVICE_IP!r}") from exc
+
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "20"))
 UPLOAD_TIMEOUT = int(os.environ.get("UPLOAD_TIMEOUT", "300"))
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
@@ -91,14 +98,27 @@ def write_lockfile(date: str) -> None:
 def device_online() -> bool:
     """
     Return True if the CrossPoint device responds on its status endpoint.
-    Uses a short timeout — flaky WiFi is expected; failures are normal.
+
+    Requires JSON with device == "X4" (not merely a non-empty HTTP body), and
+    does not follow redirects (avoids SSRF-style probes under host networking).
+    Flaky WiFi is expected; failures are normal.
     """
     try:
-        req = urllib.request.Request(STATUS_URL, headers={"User-Agent": "xteink-watcher/1.0"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        req = urllib.request.Request(
+            STATUS_URL,
+            headers={"User-Agent": "xteink-watcher/1.0"},
+        )
+        # Disable redirects: a malicious LAN host must not bounce us to localhost.
+        class _NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                return None
+
+        opener = urllib.request.build_opener(_NoRedirect)
+        with opener.open(req, timeout=10) as resp:
             body = resp.read().decode("utf-8", errors="replace")
-            # CrossPoint returns {"device":"X4",...}; any non-empty JSON is fine
-            return bool(body.strip())
+        data = json.loads(body)
+        device = str(data.get("device", "")).upper()
+        return device == "X4"
     except Exception:
         return False
 
