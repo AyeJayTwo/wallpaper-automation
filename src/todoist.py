@@ -58,20 +58,46 @@ def _api_request(endpoint: str, params: dict | None = None) -> dict | list:
         raise Exception(f"Todoist API error: {e.code} - {body}") from e
 
 
+def _current_user_id() -> str | None:
+    """Return the authenticated Todoist user id, or None on failure."""
+    try:
+        data = _api_request("user")
+        if isinstance(data, dict) and data.get("id") is not None:
+            return str(data["id"])
+    except Exception:
+        pass
+    return None
+
+
+def _is_mine_or_unassigned(task: dict, my_uid: str | None) -> bool:
+    """
+    Keep tasks assigned to me or with no assignee.
+    Drop tasks assigned to someone else (e.g. a shared-project partner).
+    """
+    responsible = task.get("responsible_uid")
+    if responsible is None or responsible == "" or responsible == 0:
+        return True
+    if my_uid is not None and str(responsible) == my_uid:
+        return True
+    return False
+
+
 def get_today_tasks(max_items: int = 12) -> List[TodoItem]:
     """
-    Fetch tasks for the daily agenda: due today or overdue.
+    Fetch tasks for the daily agenda: due today or overdue, assigned to me
+    or unassigned (excludes tasks assigned to others in shared projects).
 
-    Uses GET /api/v1/tasks/filter?query=today | overdue (paginated).
+    Uses GET /api/v1/tasks/filter (paginated).
     Results are sorted by priority (urgent first), then by content.
     """
     items: List[TodoItem] = []
     cursor = None
-    # "today" alone misses overdue carry-over; daily wallpaper wants both.
-    query = "today | overdue"
+    # today|overdue for the agenda; !assigned to: others drops partner tasks.
+    query = "(today | overdue) & (!assigned to: others)"
+    my_uid = _current_user_id()
 
     while len(items) < max_items:
-        params: dict = {"query": query, "limit": min(50, max_items)}
+        params: dict = {"query": query, "limit": min(50, max_items * 2)}
         if cursor:
             params["cursor"] = cursor
 
@@ -88,6 +114,8 @@ def get_today_tasks(max_items: int = 12) -> List[TodoItem]:
             break
 
         for t in tasks:
+            if not _is_mine_or_unassigned(t, my_uid):
+                continue
             content = (t.get("content") or "").strip()
             if not content:
                 continue
