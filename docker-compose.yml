@@ -1,0 +1,65 @@
+# Synology NAS deployment — Xteink wallpaper watcher
+#
+# Deploy steps:
+#   1. Clone/copy this repo to a Docker share on the NAS, e.g.:
+#        /volume1/docker/wallpaper-automation
+#
+#   2. Create a .env file next to this docker-compose.yml (never commit it):
+#        READWISE_TOKEN=your_token_here
+#        TODOIST_TOKEN=your_token_here
+#        # Optional — Telegram success notification:
+#        TELEGRAM_BOT_TOKEN=123456:ABC...
+#        TELEGRAM_CHAT_ID=123456789
+#
+#      Telegram setup:
+#        a. Message @BotFather → /newbot → copy the bot token
+#        b. Message your new bot once (any text)
+#        c. Get your numeric chat id via @userinfobot (preferred), or run:
+#             python3 scripts/test_telegram.py
+#           (avoid pasting the bot token into a browser URL)
+#
+#   3. Optionally set DEVICE_IP if your Xteink is not at 10.0.0.164:
+#        DEVICE_IP=10.0.0.164
+#
+#   4. Build and start:
+#        docker compose up -d --build
+#
+#   5. Tail logs to confirm polling has started:
+#        docker compose logs -f
+#
+#   6. Connect the Xteink to home WiFi on the File Upload screen.
+#      Within ~30 s the watcher will detect the device, generate today's
+#      wallpaper (fresh Todoist tasks + Readwise quote), and upload sleep.bmp.
+#      A lockfile under state/ prevents repeat uploads the same day.
+#      If Telegram is configured, you'll get a phone notification on success.
+#
+# Notes:
+#   - network_mode: host is required so the container can reach the Xteink
+#     directly on the LAN (10.0.0.x).  On Synology DSM, Container Manager
+#     supports host networking for custom Docker Compose projects.
+#   - Host networking implies LAN trust: only your home network should be
+#     able to answer at DEVICE_IP. The watcher requires /api/status JSON
+#     with "device":"X4" and does not follow HTTP redirects.
+#   - output/ persists generated BMPs across container restarts.
+#   - state/ holds per-day upload lockfiles.
+#   - The container restarts automatically if it crashes (e.g. on NAS reboot).
+#   - Telegram notify is optional; omit the env vars to disable.
+#   - Never commit .env. A .dockerignore keeps .env/output/state out of
+#     image layers when you build on the NAS.
+
+services:
+  xteink-watcher:
+    build: .
+    image: wallpaper-automation:latest
+    container_name: xteink-watcher
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: America/Los_Angeles
+      # Override device IP here or in .env if needed
+      DEVICE_IP: ${DEVICE_IP:-10.0.0.164}
+    volumes:
+      - ./output:/app/output
+      - ./state:/app/state
