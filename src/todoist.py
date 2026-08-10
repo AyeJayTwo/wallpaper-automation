@@ -26,7 +26,8 @@ def _load_env() -> None:
 _load_env()
 
 TODOIST_TOKEN = os.environ.get("TODOIST_TOKEN") or os.environ.get("TODOIST_API_TOKEN", "")
-BASE_URL = "https://api.todoist.com/rest/v2"
+# REST v2 was deprecated; current API lives under /api/v1/
+BASE_URL = "https://api.todoist.com/api/v1"
 
 
 @dataclass
@@ -37,12 +38,12 @@ class TodoItem:
     is_completed: bool = False
 
 
-def _api_request(endpoint: str, params: dict | None = None) -> list | dict:
-    """Make an authenticated request to the Todoist REST API."""
+def _api_request(endpoint: str, params: dict | None = None) -> dict | list:
+    """Make an authenticated request to the Todoist API v1."""
     if not TODOIST_TOKEN:
         raise ValueError("TODOIST_TOKEN (or TODOIST_API_TOKEN) not set in .env file")
 
-    url = f"{BASE_URL}/{endpoint}"
+    url = f"{BASE_URL}/{endpoint.lstrip('/')}"
     if params:
         url = f"{url}?{urllib.parse.urlencode(params)}"
 
@@ -59,33 +60,55 @@ def _api_request(endpoint: str, params: dict | None = None) -> list | dict:
 
 def get_today_tasks(max_items: int = 12) -> List[TodoItem]:
     """
-    Fetch incomplete tasks due today (Todoist filter: today).
+    Fetch tasks for the daily agenda: due today or overdue.
 
-    Results are sorted by priority (urgent first), then by API order.
+    Uses GET /api/v1/tasks/filter?query=today | overdue (paginated).
+    Results are sorted by priority (urgent first), then by content.
     """
-    tasks = _api_request("tasks", {"filter": "today"})
-    if not isinstance(tasks, list):
-        return []
-
     items: List[TodoItem] = []
-    for t in tasks:
-        content = (t.get("content") or "").strip()
-        if not content:
-            continue
-        # Strip markdown link syntax common in Todoist: [label](url) → label
-        if content.startswith("[") and "](" in content:
-            end = content.find("](")
-            if end > 1:
-                content = content[1:end]
-        items.append(
-            TodoItem(
-                content=content,
-                priority=int(t.get("priority") or 1),
-                is_completed=bool(t.get("is_completed")),
-            )
-        )
+    cursor = None
+    # "today" alone misses overdue carry-over; daily wallpaper wants both.
+    query = "today | overdue"
 
-    # Todoist priority: 4 = urgent, 1 = normal — sort descending
+    while len(items) < max_items:
+        params: dict = {"query": query, "limit": min(50, max_items)}
+        if cursor:
+            params["cursor"] = cursor
+
+        data = _api_request("tasks/filter", params)
+
+        # v1 filter endpoint returns {results: [...], next_cursor: ...}
+        if isinstance(data, dict):
+            tasks = data.get("results") or data.get("tasks") or []
+            cursor = data.get("next_cursor")
+        elif isinstance(data, list):
+            tasks = data
+            cursor = None
+        else:
+            break
+
+        for t in tasks:
+            content = (t.get("content") or "").strip()
+            if not content:
+                continue
+            # Strip markdown link syntax: [label](url) → label
+            if content.startswith("[") and "](" in content:
+                end = content.find("](")
+                if end > 1:
+                    content = content[1:end]
+            items.append(
+                TodoItem(
+                    content=content,
+                    priority=int(t.get("priority") or 1),
+                    is_completed=bool(t.get("checked") or t.get("is_completed")),
+                )
+            )
+            if len(items) >= max_items:
+                break
+
+        if not cursor:
+            break
+
     items.sort(key=lambda x: (-x.priority, x.content.lower()))
     return items[:max_items]
 
