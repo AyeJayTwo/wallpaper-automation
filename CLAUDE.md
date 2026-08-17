@@ -9,6 +9,9 @@ python3 generate.py
 # Generate e-ink wallpaper for specific date
 python3 generate.py --date 2026-02-05 --eink
 
+# Download latest Readwise Reader articles as EPUBs (no device upload)
+python3 -m src.reader --max 10
+
 # Upload to CrossPoint e-reader (auto-detects network)
 ~/.claude/skills/crosspoint-wallpaper/scripts/upload_wallpaper.sh [DATE] [IP]
 ```
@@ -34,7 +37,13 @@ python3 generate.py --date 2026-02-05 --eink
 - Upload as `sleep.bmp` to root directory
 - Set Sleep Screen to "Custom" in device settings
 
+**Synology watcher (`scripts/watch_and_upload.py`):**
+When the Xteink appears on the LAN File Upload screen, the watcher uploads
+today's sleep wallpaper **and** any new Reader articles (as `.epub`) that have
+not been synced yet. Requires `READWISE_TOKEN` in `.env`.
+
 ## Output Paths
 
 - iPhone wallpapers: `output/iphone/wallpaper_YYYY-MM-DD.png`
 - E-ink wallpapers: `output/eink/eink_YYYY-MM-DD.bmp`
+- Reader articles: `output/reader/*.epub`
