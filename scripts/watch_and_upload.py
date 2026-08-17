@@ -162,6 +162,8 @@ def probe_device(ip: str, timeout: int = 10) -> tuple[bool, str]:
             f"{status_url} HTTP {http_status} JSON ok but device={device!r} "
             f"(need 'X4'). keys={sorted(data)[:12]}"
         )
+    except TimeoutError:
+        return False, f"{status_url} timed out (device off, wrong IP, or not on File Upload)"
     except urllib.error.HTTPError as exc:
         return False, f"{status_url} HTTP {exc.code}"
     except urllib.error.URLError as exc:
