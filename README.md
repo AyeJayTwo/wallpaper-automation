@@ -127,6 +127,7 @@ READER_MAX_ARTICLES=25
 
 Articles are written to `output/reader/` and tracked in `state/reader_sync.json`
 so each document is only downloaded once.
+
 ## CLI Reference
 
 ```
