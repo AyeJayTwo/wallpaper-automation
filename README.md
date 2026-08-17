@@ -87,6 +87,8 @@ DEFAULT_TIMEZONE = "America/Los_Angeles"
 
 ## Readwise Integration
 
+### Daily quotes (e-ink wallpaper)
+
 Add daily quotes from your [Readwise](https://readwise.io) highlight library to e-ink wallpapers.
 
 ### Setup
@@ -107,6 +109,24 @@ Quotes are deterministically selected — the same date will always show the sam
 generate_eink(include_quote=False)
 ```
 
+### Reader article sync (Xteink / Synology watcher)
+
+When the Synology watcher detects your Xteink on the File Upload screen, it also
+pulls new documents from [Readwise Reader](https://readwise.io/reader_api) and
+uploads them as `.epub` files the device can open.
+
+```bash
+# Manual download only (no device upload)
+python3 -m src.reader --max 10
+
+# Optional .env knobs for the watcher
+READER_SYNC=1
+READER_LOCATIONS=new          # or: new,later
+READER_MAX_ARTICLES=25
+```
+
+Articles are written to `output/reader/` and tracked in `state/reader_sync.json`
+so each document is only downloaded once.
 ## CLI Reference
 
 ```
@@ -168,18 +188,21 @@ See [docs/ios_shortcuts_setup.md](docs/ios_shortcuts_setup.md) for setting up au
 │   ├── calendar_engine.py   # Date/calendar logic
 │   ├── render_engine.py     # iPhone wallpaper rendering
 │   ├── eink_renderer.py     # E-ink rendering + quotes
-│   ├── readwise.py          # Readwise API integration
+│   ├── readwise.py          # Readwise highlights API (quotes)
+│   ├── reader.py            # Readwise Reader API (article → EPUB)
 │   ├── validator.py         # Output validation
 │   ├── orchestrator.py      # Pipeline coordination
 │   └── config.py            # Configuration
 ├── scripts/
 │   ├── daily_generate.sh    # Cron automation
-│   └── deliver_to_shortcuts.py
+│   ├── deliver_to_shortcuts.py
+│   └── watch_and_upload.py  # Synology: wallpaper + Reader sync
 ├── assets/
 │   └── backgrounds/         # Background images
-├── output/                  # Generated wallpapers
+├── output/                  # Generated wallpapers + Reader EPUBs
 │   ├── iphone/
-│   └── eink/
+│   ├── eink/
+│   └── reader/
 └── docs/                    # Setup guides
 ```
 

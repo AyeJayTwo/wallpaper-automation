@@ -10,6 +10,10 @@
 #        # Optional — Telegram success notification:
 #        TELEGRAM_BOT_TOKEN=123456:ABC...
 #        TELEGRAM_CHAT_ID=123456789
+#        # Optional — Reader article sync (defaults shown):
+#        READER_SYNC=1
+#        READER_LOCATIONS=new
+#        READER_MAX_ARTICLES=25
 #
 #      Telegram setup:
 #        a. Message @BotFather → /newbot → copy the bot token
@@ -29,8 +33,10 @@
 #
 #   6. Connect the Xteink to home WiFi on the File Upload screen.
 #      Within ~30 s the watcher will detect the device, generate today's
-#      wallpaper (fresh Todoist tasks + Readwise quote), and upload sleep.bmp.
-#      A lockfile under state/ prevents repeat uploads the same day.
+#      wallpaper (fresh Todoist tasks + Readwise quote), upload sleep.bmp,
+#      then download new Reader articles as EPUBs and upload those too.
+#      Lockfiles under state/ prevent repeat wallpaper/article pushes the
+#      same day. Article *downloads* stay incremental via reader_sync.json.
 #      If Telegram is configured, you'll get a phone notification on success.
 #
 # Notes:
@@ -40,10 +46,11 @@
 #   - Host networking implies LAN trust: only your home network should be
 #     able to answer at DEVICE_IP. The watcher requires /api/status JSON
 #     with "device":"X4" and does not follow HTTP redirects.
-#   - output/ persists generated BMPs across container restarts.
-#   - state/ holds per-day upload lockfiles.
+#   - output/ persists generated BMPs and Reader EPUBs across restarts.
+#   - state/ holds per-day upload lockfiles + reader_sync.json.
 #   - The container restarts automatically if it crashes (e.g. on NAS reboot).
 #   - Telegram notify is optional; omit the env vars to disable.
+#   - Set READER_SYNC=0 to upload wallpaper only.
 #   - Never commit .env. A .dockerignore keeps .env/output/state out of
 #     image layers when you build on the NAS.
 
