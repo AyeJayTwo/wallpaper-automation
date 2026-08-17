@@ -125,32 +125,67 @@ def write_reader_lockfile(date: str, count: int) -> None:
     )
 
 
-def device_online() -> bool:
+def probe_device(ip: str, timeout: int = 10) -> tuple[bool, str]:
     """
-    Return True if the CrossPoint device responds on its status endpoint.
+    Probe CrossPoint /api/status at ip.
 
-    Requires JSON with device == "X4" (not merely a non-empty HTTP body), and
-    does not follow redirects (avoids SSRF-style probes under host networking).
-    Flaky WiFi is expected; failures are normal.
+    Returns (online, detail). online is True only when JSON has device == "X4".
+    Does not follow redirects (avoids SSRF-style probes under host networking).
     """
+    status_url = f"http://{ip}/api/status"
     try:
         req = urllib.request.Request(
-            STATUS_URL,
+            status_url,
             headers={"User-Agent": "xteink-watcher/1.0"},
         )
-        # Disable redirects: a malicious LAN host must not bounce us to localhost.
+
         class _NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, req, fp, code, msg, headers, newurl):
                 return None
 
         opener = urllib.request.build_opener(_NoRedirect)
-        with opener.open(req, timeout=10) as resp:
+        with opener.open(req, timeout=timeout) as resp:
+            http_status = getattr(resp, "status", 200)
             body = resp.read().decode("utf-8", errors="replace")
-        data = json.loads(body)
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            return False, f"{status_url} HTTP {http_status} non-JSON: {body[:120]!r}"
         device = str(data.get("device", "")).upper()
-        return device == "X4"
-    except Exception:
-        return False
+        if device == "X4":
+            return True, (
+                f"{status_url} ok device={device} "
+                f"ip={data.get('ip', '?')} mode={data.get('mode', '?')} "
+                f"rssi={data.get('rssi', '?')}"
+            )
+        return False, (
+            f"{status_url} HTTP {http_status} JSON ok but device={device!r} "
+            f"(need 'X4'). keys={sorted(data)[:12]}"
+        )
+    except urllib.error.HTTPError as exc:
+        return False, f"{status_url} HTTP {exc.code}"
+    except urllib.error.URLError as exc:
+        return False, f"{status_url} unreachable: {exc.reason}"
+    except Exception as exc:
+        return False, f"{status_url} {type(exc).__name__}: {exc}"
+
+
+def device_online() -> bool:
+    """
+    Return True if the CrossPoint device responds on its status endpoint.
+
+    Requires JSON with device == "X4" (not merely a non-empty HTTP body).
+    Flaky WiFi is expected; failures are normal.
+    """
+    ok, detail = probe_device(DEVICE_IP)
+    if not ok:
+        device_online.last_error = detail  # type: ignore[attr-defined]
+    else:
+        device_online.last_error = ""  # type: ignore[attr-defined]
+    return ok
+
+
+device_online.last_error = ""  # type: ignore[attr-defined]
 
 
 def generate_eink(date: str) -> Path:
@@ -375,6 +410,8 @@ def main() -> None:
 
     last_logged_date = None
     last_logged_skip = None
+    last_waiting_log = 0.0
+    waiting_log_every = max(POLL_INTERVAL * 6, 60)  # ~2 min at default 20s poll
 
     while True:
         date = today_str()
@@ -400,6 +437,20 @@ def main() -> None:
             continue
 
         if not device_online():
+            now = time.monotonic()
+            if now - last_waiting_log >= waiting_log_every:
+                pending = []
+                if not wallpaper_done:
+                    pending.append("wallpaper")
+                if READER_SYNC_ENABLED and not reader_done:
+                    pending.append("Reader articles")
+                log.info(
+                    "Waiting for device at %s (still need: %s). Last probe: %s",
+                    DEVICE_IP,
+                    ", ".join(pending) or "nothing",
+                    device_online.last_error or "no response",
+                )
+                last_waiting_log = now
             time.sleep(POLL_INTERVAL)
             continue
 
